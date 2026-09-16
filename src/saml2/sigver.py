@@ -3,33 +3,29 @@ Based on the use of xmlsec1 binaries and not the python xmlsec module.
 """
 
 import base64
-import datetime
 import hashlib
 import itertools
 import logging
 import os
 import re
-from subprocess import PIPE
-from subprocess import Popen
-import sys
+from datetime import datetime, timezone
+from subprocess import PIPE, Popen
 from tempfile import NamedTemporaryFile
 from time import mktime
+from urllib import parse
 from uuid import uuid4 as gen_random_key
-
-import dateutil
 
 
 # importlib.resources was introduced in python 3.7
 # files API from importlib.resources introduced in python 3.9
-if sys.version_info[:2] >= (3, 9):
+try:
     from importlib.resources import files as _resource_files
-else:
+except ImportError:
     from importlib_resources import files as _resource_files
 
 from urllib import parse
 
-from OpenSSL import crypto
-import pytz
+from cryptography import x509
 
 from saml2 import ExtensionElement
 from saml2 import SamlBase
@@ -383,14 +379,14 @@ def active_cert(key):
     """
     try:
         cert_str = pem_format(key)
-        cert = crypto.load_certificate(crypto.FILETYPE_PEM, cert_str)
+        cert = x509.load_pem_x509_certificate(cert_str)
     except AttributeError:
         return False
 
-    now = pytz.UTC.localize(datetime.datetime.utcnow())
-    valid_from = dateutil.parser.parse(cert.get_notBefore())
-    valid_to = dateutil.parser.parse(cert.get_notAfter())
-    active = not cert.has_expired() and valid_from <= now < valid_to
+    now = datetime.now(timezone.utc)
+    valid_from = cert.not_valid_before_utc
+    valid_to = cert.not_valid_after_utc
+    active = valid_from <= now < valid_to
     return active
 
 
